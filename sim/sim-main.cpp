@@ -44,6 +44,7 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QDirIterator>
+#include <QFileInfo>
 #include <QFont>
 #include <QFontDatabase>
 #include <QStandardPaths>
@@ -284,9 +285,18 @@ static bool sim_parse_args(int argc, char *argv[])
             break;
 
         case 'k':
+        {
+            // Applied once the runtime is initialized, in program_init().
+            // Resolve relative to the current directory if the file exists,
+            // since we chdir to the application data directory later.
             check_arg();
-            load_saved_keymap(arg);
+            QFileInfo kmap(QString::fromUtf8(arg));
+            keymap_filename = arg;
+            if (kmap.exists())
+                keymap_filename =
+                    strdup(kmap.absoluteFilePath().toUtf8().constData());
             break;
+        }
 
         case 'l':
             rplcmds.print_levels = true;

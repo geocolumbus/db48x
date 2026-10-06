@@ -90,6 +90,9 @@ user_interface ui;
 uint last_keystroke_time = 0;
 int  last_key            = 0;
 
+// Keymap requested at startup (e.g. simulator -k option), null for saved one
+cstring keymap_filename = nullptr;
+
 RECORDER(main,          16, "Main RPL thread");
 RECORDER(main_error,    16, "Errors in the main RPL thread");
 RECORDER(keymap_error,   8, "Errors loading the saved keymap");
@@ -333,12 +336,20 @@ bool load_saved_keymap(cstring name)
 // ----------------------------------------------------------------------------
 {
     bool isdefault = false;
-    char keymap_name[80] = { 0 };
+    char keymap_name[256] = { 0 };
     if (name)
     {
-        file kcfg("config/keymap.cfg", file::WRITING);
-        if (kcfg.valid())
-            kcfg.write(name, strlen(name));
+        // Explicitly requested keymap: only remember it if it loads
+        if (ui.load_keymap(name))
+        {
+            file kcfg("config/keymap.cfg", file::WRITING);
+            if (kcfg.valid())
+                kcfg.write(name, strlen(name));
+            return true;
+        }
+        record(keymap_error, "Unable to load keymap %s: %s",
+               name, rt.error() ? cstring(rt.error()) : "invalid keymap");
+        rt.clear_error();
     }
 
     file kcfg("config/keymap.cfg", file::READING);
@@ -416,7 +427,7 @@ void program_init()
 
     // Check if we have a state file to load
     load_system_state();
-    load_saved_keymap();
+    load_saved_keymap(keymap_filename);
 
     // Enable wakeup each minute (for clock update)
     SET_ST(STAT_CLK_WKUP_ENABLE);
