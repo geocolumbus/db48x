@@ -6269,13 +6269,13 @@ static bool keymap_append_default(uint plane, uint key)
 // ----------------------------------------------------------------------------
 //   Append the default object for a key that could not be read from a keymap
 // ----------------------------------------------------------------------------
-//   This keeps the following entries at the right position in the plane
+//   This keeps the following entries at the right position in the plane.
+//   Only non-alpha planes have default commands, the others get empty text.
 {
     object_p obj = nullptr;
-    if (key < user_interface::NUM_KEYS)
+    if (plane < user_interface::NUM_PLANES && key < user_interface::NUM_KEYS)
     {
-        const byte *ptr =
-            defaultCommand[plane % user_interface::NUM_PLANES] + 2 * key;
+        const byte *ptr = defaultCommand[plane] + 2 * key;
         if (*ptr)
             obj = object_p(ptr);
     }
