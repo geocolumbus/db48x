@@ -13744,7 +13744,7 @@ void tests::polynomials()
         .test(CLEAR, "'X^3-5'", ENTER, ID_PolynomialsMenu, ID_ToPolynomial)
         .expect("ⓅX↑3-5")
         .test("3", ID_divide)
-        .expect("'(X·X²+-5)÷3'");
+        .expect("Ⓟ¹/₃·X↑3-1 ²/₃");
     step("Polynomial divided by constant polynomial")
         .test(CLEAR, "'X^3-5'", ENTER, ID_PolynomialsMenu, ID_ToPolynomial)
         .expect("ⓅX↑3-5")
@@ -13752,6 +13752,24 @@ void tests::polynomials()
         .expect("Ⓟ3")
         .test(ID_divide)
         .expect("Ⓟ¹/₃·X↑3-1 ²/₃");
+    step("Polynomial divided by integer divides all coefficients")
+        .test(CLEAR, "'2*X^2-4' →Poly 2 /", ENTER)
+        .expect("ⓅX↑2-2");
+    step("Polynomial divided by integer gives fractional coefficients")
+        .test(CLEAR, "'X^2-1' →Poly 2 /", ENTER)
+        .expect("Ⓟ¹/₂·X↑2-¹/₂");
+    step("Polynomial divided by decimal")
+        .test(CLEAR, "'X^2-1' →Poly 2. /", ENTER)
+        .expect("Ⓟ0.5·X↑2-0.5");
+    step("Polynomial divided by number converts back to expression")
+        .test(CLEAR, "'2*X^2-4' →Poly 2 / Poly→", ENTER)
+        .expect("'X²+-2'");
+    step("Polynomial divided by zero")
+        .test(CLEAR, "'X^2-1' →Poly 0 /", ENTER)
+        .error("Divide by zero");
+    step("Polynomial divided by symbol is an expression")
+        .test(CLEAR, "'X^2-1' →Poly 'A' /", ENTER)
+        .expect("'(X²+-1)÷A'");
 
 
     step("Restore default rendering for polynomials")
