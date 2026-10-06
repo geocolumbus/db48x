@@ -63,10 +63,12 @@ size_t hwfp_base::render(renderer &r, double x, char suffix)
 
 
 template <typename hw>
-algebraic_p hwfp<hw>::to_fraction(uint count, uint prec) const
+algebraic_p hwfp<hw>::to_fraction(uint count, uint digits) const
 // ----------------------------------------------------------------------------
 //   Convert hwfp number to fraction
 // ----------------------------------------------------------------------------
+//   Same rule as decimal::to_fraction: first convergent within half a unit
+//   of the last significant digit (displayed digits when `digits` is zero)
 {
     hw   num = value();
     bool neg = num < 0;
@@ -83,25 +85,28 @@ algebraic_p hwfp<hw>::to_fraction(uint count, uint prec) const
     hw   v2num  = 1.0;
     hw   v2den  = 0.0;
 
-    uint maxdec = Settings.Precision() - 3;
-    if (prec > maxdec)
-        prec = maxdec;
+    large exp10  = large(std::floor(std::log10(num)));
+    uint  maxdig = Settings.Precision() - 3;
+    if (!digits)
+        digits = algebraic::fraction_digits(exp10);
+    if (digits > maxdig)
+        digits = maxdig;
 
-    // Limit fraction precision to displayed digits (DisplayDigits) like HP50G
-    uint dispdig = Settings.DisplayDigits();
-    if (dispdig > 0 && prec > dispdig)
-        prec = dispdig;
-
-    hw eps = std::exp(-hw(prec) * M_LN10);
+    hw eps = 5 * std::exp(hw(exp10 - large(digits)) * M_LN10);
+    hw err = decimal_part;
 
     while (count--)
     {
-        // Check if the decimal part is small enough
-        if (decimal_part <= eps)
+        // Check if the current convergent is close enough
+        if (err <= eps || decimal_part <= 0.0)
             break;
 
+        // Round up when the floor is only off by a binary rounding error
         hw next = 1.0 / decimal_part;
         whole_part = std::floor(next);
+        hw ulps = 4 * std::numeric_limits<hw>::epsilon() * next;
+        if (next - whole_part >= 1 - ulps)
+            whole_part += 1;
 
         hw s = v1num;
         v1num = whole_part * v1num + v2num;
@@ -111,13 +116,10 @@ algebraic_p hwfp<hw>::to_fraction(uint count, uint prec) const
         v1den = whole_part * v1den + v2den;
         v2den = s;
 
-        // Check convergence: break when |num - n/d| < 10^(-prec)
         hw convergent = v1num / v1den;
-        hw err = num - convergent;
+        err = num - convergent;
         if (err < 0)
             err = -err;
-        if (err < eps)
-            break;
 
         decimal_part = next - whole_part;
     }
@@ -291,8 +293,8 @@ typename hwfp<hw>::hwfp_p hwfp<hw>::Max(hwfp_r x, hwfp_r y)
 }
 
 
-template algebraic_p hwfp<float>::to_fraction(uint count, uint prec) const;
-template algebraic_p hwfp<double>::to_fraction(uint count, uint prec) const;
+template algebraic_p hwfp<float>::to_fraction(uint count, uint digits) const;
+template algebraic_p hwfp<double>::to_fraction(uint count, uint digits) const;
 
 #define ARITH1(name)     ARITH1I(name, float); ARITH1I(name, double)
 #define ARITH1I(name,ty)                                                 \

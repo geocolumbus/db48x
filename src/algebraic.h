@@ -74,6 +74,9 @@ struct algebraic : command
     // Convert to a fraction
     static bool to_fraction(algebraic_g &x);
 
+    // Significant digits displayed for a value with given decimal exponent
+    static uint fraction_digits(large exp10);
+
     // Convert to a fraction with square roots
     static bool to_sqrt(algebraic_g &x);
 

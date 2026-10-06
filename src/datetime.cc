@@ -543,7 +543,13 @@ void render_time(renderer &r, algebraic_g &value,
     settings::SaveNumericalResults snr(false);
     settings::SaveFractionDigits sfd(12);
     settings::SaveFractionIterations sfi(15);
-    algebraic::to_fraction(value);
+    {
+        // Convert to a fraction independently of the display mode
+        settings::SaveDisplayMode    sdm(object::ID_Std);
+        settings::SaveDisplayDigits  sdd(15);
+        settings::SaveFractionDigits sfd15(15);
+        algebraic::to_fraction(value);
+    }
     uint h = value->as_uint32(0, false);
     r.flush();
     r.printf("%u", h);

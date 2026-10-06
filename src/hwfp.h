@@ -187,7 +187,7 @@ struct hwfp : hwfp_base
 
 
     algebraic_p   to_fraction(uint count = Settings.FractionIterations(),
-                              uint prec  = Settings.FractionDigits()) const;
+                              uint digits = 0) const;
     // ------------------------------------------------------------------------
     //   Convert floating point to fraction
     // ------------------------------------------------------------------------

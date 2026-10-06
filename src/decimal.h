@@ -496,7 +496,7 @@ struct decimal : algebraic
     algebraic_p      to_integer() const;
     bignum_p         to_bignum() const;
     algebraic_p      to_fraction(uint count = Settings.FractionIterations(),
-                                 uint prec  = Settings.FractionDigits()) const;
+                                 uint digits = 0) const;
     // ------------------------------------------------------------------------
     //   Convert decimal number to fraction
     // ------------------------------------------------------------------------

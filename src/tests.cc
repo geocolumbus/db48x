@@ -4656,18 +4656,54 @@ void tests::fraction_decimal_conversions()
         .test("→Q", ENTER)
         .want("[ 'X' 16/5 -11/2 ]");
 
-    // HP50G limits fraction precision to FIX mode.
+    // Like legacy RPL, the fraction matches the displayed digits, i.e. the
+    // first convergent within half a unit of the last displayed digit
     step("ToFraction respects DisplayDigits (STD, FIX 8, 6, 4, 2)")
         .test(CLEAR, "Std", ENTER).noerror()
-        .test("pi →Num ToFraction", ENTER).expect("5 419 351/1 725 033")
+        .test("pi →Num ToFraction", ENTER).expect("1 146 408/364 913")
         .test(CLEAR, "8 FIX", ENTER).noerror()
         .test("pi →Num ToFraction", ENTER).expect("103 993/33 102")
         .test(CLEAR, "6 FIX", ENTER).noerror()
-        .test("pi →Num ToFraction", ENTER).expect("103 993/33 102")
+        .test("pi →Num ToFraction", ENTER).expect("355/113")
         .test(CLEAR, "4 FIX", ENTER).noerror()
         .test("pi →Num ToFraction", ENTER).expect("355/113")
         .test(CLEAR, "2 FIX", ENTER).noerror()
-        .test("pi →Num ToFraction", ENTER).expect("333/106");
+        .test("pi →Num ToFraction", ENTER).expect("22/7")
+        .test(CLEAR, "Std", ENTER).noerror();
+
+    step("→Q accepts convergents matching the 12 displayed digits in STD")
+        .test(CLEAR, "0.333333333333 →Q", ENTER).expect("1/3")
+        .test(CLEAR, "0.142857142857 →Q", ENTER).expect("1/7")
+        .test(CLEAR, "-0.142857142857 →Q", ENTER).expect("-1/7")
+        .test(CLEAR, "0.33 →Q", ENTER).expect("33/100")
+        .test(CLEAR, "0.1428 →Q", ENTER).expect("357/2 500");
+    step("→Q in SIG mode")
+        .test(CLEAR, "12 SIG 0.333333333333 →Q", ENTER).expect("1/3")
+        .test(CLEAR, "Std", ENTER).noerror();
+    step("→Q in FIX mode matches the displayed decimals")
+        .test(CLEAR, "4 FIX 0.3333 →Q", ENTER).expect("1/3")
+        .test(CLEAR, "3 FIX 0.333 →Q", ENTER).expect("1/3")
+        .test(CLEAR, "3 FIX 0.3333 →Q", ENTER).expect("1/3")
+        .test(CLEAR, "3 FIX 0.33 →Q", ENTER).expect("33/100")
+        .test(CLEAR, "Std", ENTER).noerror();
+    step("→Q tolerance is relative, small values are not zero")
+        .test(CLEAR, "1E-15 →Q", ENTER)
+        .expect("1/1 000 000 000 000 000")
+        .test(CLEAR, "-1E-15 →Q", ENTER)
+        .expect("-1/1 000 000 000 000 000")
+        .test(CLEAR, "1.5E-14 →Q", ENTER)
+        .expect("1/66 666 666 666 666")
+        .test(CLEAR, "'1E-15*X' →Q", ENTER)
+        .expect("'1/1 000 000 000 000 000·X'")
+        .test(CLEAR, "4 FIX 1E-15 →Q", ENTER)
+        .expect("1/1 000 000 000 000 000")
+        .test(CLEAR, "Std", ENTER).noerror();
+    step("→Q with hardware floating-point uses the same rules")
+        .test(CLEAR, "0.333333333333D →Q", ENTER).expect("1/3")
+        .test(CLEAR, "1E-15D →Q", ENTER)
+        .expect("1/1 000 000 000 000 000")
+        .test(CLEAR, "3 FIX 0.333D →Q", ENTER).expect("1/3")
+        .test(CLEAR, "Std", ENTER).noerror();
 
 
     step("Restoring small fraction mode")
@@ -13871,7 +13907,7 @@ void tests::polynomial_roots()
         .test(CLEAR, "'X^2+3=0' 'X' Zeros", ENTER)
         .expect("{ }")
         .test(CLEAR, "ComplexResults 'X^2+3=0' 'X' Zeros", ENTER)
-        .expect("{ '√ 3'ⅈ -'√ 3'ⅈ }")
+        .expect("{ '√ 3·(ⅈ)' '-(√ 3·(ⅈ))' }")
         .test(CLEAR, "'ComplexResults' PURGE", ENTER);
 }
 
@@ -16794,7 +16830,7 @@ void tests::exact_quotient()
         .expect("'1/2·π'");
     step("Three quarters pi")
         .test(CLEAR, "pi →Num 3 * 4 /", ENTER, ID_ToQuotient)
-        .expect("'3·π÷4'");
+        .expect("'3/4·π'");
     step("Two pi")
         .test(CLEAR, "pi →Num 2 *", ENTER, ID_ToQuotient)
         .expect("'2·π'");
@@ -16842,7 +16878,7 @@ void tests::exact_quotient()
         .expect("'-(5/4·√ 13)'");
     step("Pi with larger denominator: 7*pi/11")
         .test(CLEAR, "pi →Num 7 * 11 /", ENTER, ID_ToQuotient)
-        .expect("'7·π÷11'");
+        .expect("'7/11·π'");
     step("Ln(2) factor: 3*ln(2)/7")
         .test(CLEAR, "2 ln 3 * 7 /", ENTER, ID_ToQuotient)
         .expect("'3/7·ln 2'");
@@ -16879,10 +16915,10 @@ void tests::exact_quotient()
         .test(CLEAR, "Std", ENTER).noerror()
         .test("4 FIX", ENTER).noerror()
         .test("pi →Num 0.001 +", ENTER, ID_ToQuotient)
-        .expect("'exp(150/131)'")
+        .expect("1 697/540")
         .test(CLEAR, "3 FIX", ENTER).noerror()
         .test("pi →Num 0.001 +", ENTER, ID_ToQuotient)
-        .expect("'123/43·ln 3'")
+        .expect("22/7")
         .test(CLEAR, "2 FIX", ENTER).noerror()
         .test("pi →Num 0.001 +", ENTER, ID_ToQuotient)
         .expect("'π'")
@@ -16894,7 +16930,7 @@ void tests::exact_quotient()
         .expect("'8/11·ln 7'")
         .test(CLEAR, "3 FIX", ENTER).noerror()
         .test("2 √ →Num 0.001 +", ENTER, ID_ToQuotient)
-        .expect("'8/11·ln 7'")
+        .expect("75/53")
         .test(CLEAR, "Std", ENTER).noerror();
     step("→Qπ with complex")
         .test(CLEAR, "0.25+0.5ⅈ", ENTER, ID_ToQuotient)
@@ -16902,21 +16938,77 @@ void tests::exact_quotient()
         .test(CLEAR, "1-2ⅈ 4", ENTER, DIV, ID_ToQuotient)
         .expect("1/4-1/2ⅈ")
         .test(CLEAR, "-1-0ⅈ LN", ENTER, ID_ToQuotient)
-        .expect("'π'ⅈ");;
+        .expect("'π·(ⅈ)'");
     step("→Qπ with complex rounding to re or im only")
         .test(CLEAR, "0.25+0.000000000000005ⅈ", ENTER, ID_ToQuotient)
         .expect("1/4")
         .test(CLEAR, "1e-24-2.2ⅈ 4", ENTER, DIV, ID_ToQuotient)
-        .expect("-'11/20'ⅈ")
+        .expect("-11/20ⅈ")
         .test(CLEAR, "-1-0ⅈ LN 1e-24 +", ENTER, ID_ToQuotient)
-        .expect("'π'ⅈ");;
+        .expect("'π·(ⅈ)'");
+    step("→Qπ with complex gives an object that re-parses")
+        .test(CLEAR, "1+3.14159265358979ⅈ", ENTER, ID_ToQuotient)
+        .expect("'1+π·(ⅈ)'")
+        .test("→STR STR→", ENTER).expect("'1+π·(ⅈ)'")
+        .test("→Num", ENTER).expect("1+3.14159 26535 9ⅈ")
+        .test(CLEAR, "1-3.14159265358979ⅈ", ENTER, ID_ToQuotient)
+        .expect("'1-π·(ⅈ)'")
+        .test("→STR STR→", ENTER).expect("'1-π·(ⅈ)'")
+        .test("→Num", ENTER).expect("1-3.14159 26535 9ⅈ")
+        .test(CLEAR, "1-1ⅈ LN NEG", ENTER, ID_ToQuotient)
+        .expect("'-(1/2·ln 2)+1/4·π·(ⅈ)'")
+        .test("→STR STR→ →Num", ENTER)
+        .expect("-0.34657 35902 8+0.78539 81633 97ⅈ");
     step("→Qπ with range")
         .test(CLEAR, "pi →Num pi →Num 0.001 +", ENTER, ID_RangeMenu, ID_ToRange)
         .test(ID_ToQuotient)
-        .expect("'π'…'2↑(793 036/480 059)'");
+        .expect("'π'…1 812 814/576 853");
     step("→Qπ with vector")
         .test(CLEAR, "[ 0.25 '√ 40' ] →Num", ENTER, ID_ToQuotient)
         .expect("[ 1/4 '2·√ 10' ]");
+    step("→Qπ only accepts patterns that reproduce the displayed digits")
+        .test(CLEAR, "1.5707963268", ENTER, ID_ToQuotient).expect("'1/2·π'")
+        .test(CLEAR, "1.57079632679", ENTER, ID_ToQuotient).expect("'1/2·π'")
+        .test(CLEAR, "0.785398163397", ENTER, ID_ToQuotient)
+        .expect("'1/4·π'")
+        .test(CLEAR, "1.41421356237", ENTER, ID_ToQuotient).expect("'√ 2'")
+        .test(CLEAR, "1.4142135624", ENTER, ID_ToQuotient).expect("'√ 2'")
+        .test(CLEAR, "1.414213562373", ENTER, ID_ToQuotient).expect("'√ 2'")
+        .test(CLEAR, "0.346573590280", ENTER, ID_ToQuotient)
+        .expect("'1/2·ln 2'")
+        .test(CLEAR, "1.23456789", ENTER, ID_ToQuotient)
+        .expect("1 356 579/1 098 829")
+        .test(CLEAR, "0.333333333333", ENTER, ID_ToQuotient).expect("1/3")
+        .test(CLEAR, "0.3", ENTER, ID_ToQuotient).expect("3/10")
+        .test(CLEAR, "3.14", ENTER, ID_ToQuotient).expect("157/50")
+        .test(CLEAR, "'π/2' →Num", ENTER, ID_ToQuotient).expect("'1/2·π'")
+        .test(CLEAR, "7 pi →Num * 3 /", ENTER, ID_ToQuotient)
+        .expect("'7/3·π'")
+        .test(CLEAR, "2 LN", ENTER, ID_ToQuotient).expect("'ln 2'");
+    step("→Qπ round trip matches the input to 12 digits")
+        .test(CLEAR, "1.5707963268 DUP →Qπ →Num OVER - SWAP / ABS 5E-12 ≤",
+              ENTER).expect("True")
+        .test(CLEAR, "1.57079632679 DUP →Qπ →Num OVER - SWAP / ABS 5E-12 ≤",
+              ENTER).expect("True")
+        .test(CLEAR, "0.785398163397 DUP →Qπ →Num OVER - SWAP / ABS 5E-12 ≤",
+              ENTER).expect("True")
+        .test(CLEAR, "1.41421356237 DUP →Qπ →Num OVER - SWAP / ABS 5E-12 ≤",
+              ENTER).expect("True")
+        .test(CLEAR, "1.23456789 DUP →Qπ →Num OVER - SWAP / ABS 5E-12 ≤",
+              ENTER).expect("True")
+        .test(CLEAR, "0.333333333333 DUP →Qπ →Num OVER - SWAP / ABS 5E-12 ≤",
+              ENTER).expect("True");
+    step("→Qπ on large and small values never divides by zero")
+        .test(CLEAR, "1E20", ENTER, ID_ToQuotient)
+        .expect("100 000 000 000 000 000 000")
+        .test(CLEAR, "-1E20", ENTER, ID_ToQuotient)
+        .expect("-100 000 000 000 000 000 000")
+        .test(CLEAR, "1.5E30", ENTER, ID_ToQuotient)
+        .expect("1 500 000 000 000 000 000 000 000 000 000")
+        .test(CLEAR, "1E500", ENTER, ID_ToQuotient, "→Num", ENTER)
+        .expect("1.⁳⁵⁰⁰")
+        .test(CLEAR, "1E-15", ENTER, ID_ToQuotient)
+        .expect("1/1 000 000 000 000 000");
     step("→Qπ with algebraic expression (multiple variables and functions)")
         .test(CLEAR, "'2.5*X^(exp(2))-sqrt(3)+Y*ln(2.0)'", ENTER, ID_ToQuotient)
         .expect("'5/2·X↑exp 2-√ 3+Y·ln 2'");
@@ -16946,7 +17038,7 @@ void tests::exact_quotient()
     step("XQ(1/3 ToDecimal) = 1/3")
         .test(CLEAR, "1/3 ToDecimal XQ", ENTER).expect("¹/₃");
     step("XQ(-0.5) = -1/2")
-        .test(CLEAR, "-0.5 XQ", ENTER).expect("'-(¹/₂)'");
+        .test(CLEAR, "-0.5 XQ", ENTER).expect("-¹/₂");
 
     // XQ_SQRT template: √(p/q)
     step("XQ(√2) = '√ 2'")

@@ -1308,13 +1308,16 @@ bignum_p decimal::to_bignum() const
 }
 
 
-algebraic_p decimal::to_fraction(uint count, uint decimals) const
+algebraic_p decimal::to_fraction(uint count, uint digits) const
 // ----------------------------------------------------------------------------
 //   Convert a decimal value to a fraction
 // ----------------------------------------------------------------------------
+//   The result is the first continued-fraction convergent that matches the
+//   value to `digits` significant digits, i.e. within half a unit of the last
+//   significant digit. When `digits` is zero, use the digits being displayed.
 {
     decimal_g   num = this;
-    decimal_g   next, ip, fp, one;
+    decimal_g   next, ip, fp, one, tol, err;
     bignum_g    n1, d1, n2, d2, s, i;
     bool        neg = num->is_negative();
     if (!num->split(ip, fp))
@@ -1329,25 +1332,29 @@ algebraic_p decimal::to_fraction(uint count, uint decimals) const
         fp = decimal::neg(fp);
         target = decimal::neg(num);
     }
+
+    // Tolerance is relative to the magnitude, so that 1E-15 is not zero
+    large exp10  = num->exponent() - 1;
+    uint  maxdig = Settings.Precision() - 3;
+    if (!digits)
+        digits = algebraic::fraction_digits(exp10);
+    if (digits > maxdig)
+        digits = maxdig;
+    tol = make(5, exp10 - large(digits));
     one = make(1);
     n1 = ip->to_bignum();
     d1 = bignum::make(1);
     n2 = d1;
     d2 = bignum::make(0);
-
-    uint maxdec = Settings.Precision() - 3;
-    if (decimals > maxdec)
-        decimals = maxdec;
-
-    // Limit fraction precision to displayed digits (DisplayDigits) like HP50G
-    uint dispdig = Settings.DisplayDigits();
-    if (dispdig > 0 && decimals > dispdig)
-        decimals = dispdig;
+    err = fp;
 
     while (count--)
     {
-        // Check if the decimal part is small enough
-        if (fp->is_zero() || fp->exponent() < -large(decimals))
+        // Check if the current convergent is close enough
+        decimal_g delta = err - tol;
+        if (!delta || delta->is_negative() || delta->is_zero())
+            break;
+        if (fp->is_zero())
             break;
 
         next = one / fp;
@@ -1369,14 +1376,11 @@ algebraic_p decimal::to_fraction(uint count, uint decimals) const
         d2 = s;
 
         fraction_g f = +big_fraction::make(n1, d1);
-        // Check convergence: break when |target - n/d| < 10^(-decimals)
-        decimal_g err = target - decimal_g(decimal::from_fraction(f));
-        if (err->is_zero())
-            break;
+        err = target - decimal_g(decimal::from_fraction(f));
+        if (!err)
+            return nullptr;
         if (err->is_negative())
             err = decimal::neg(err);
-        if (-err->exponent() > large(decimals))
-            break;
 
         fp = next - ip;
     }

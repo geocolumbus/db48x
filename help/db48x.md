@@ -16805,26 +16805,41 @@ For example, `1/4 →Num` results in `0.25`.
 ## →Q
 
 Convert decimal values to fractions. For example `1.25 →Frac` gives `5/4`.
-The precision of the conversion in digits is defined by
-[→FracDigits](#ToFractionDigits), and the maximum number of iterations for the
-conversion is defined by [→FracDigits](#ToFractionIterations)
+
+Like on legacy RPL calculators, the conversion is done to the digits being
+displayed: the result is the simplest continued-fraction convergent that agrees
+with the value to within half a unit of the last displayed digit. In `Std` mode,
+this is the number of significant digits being displayed (12 by default), so
+`0.333333333333 →Q` gives `1/3`. In `4 FIX` mode, `0.3333 →Q` also gives `1/3`.
+The tolerance is relative to the magnitude of the value, so that small values
+such as `1E-15` are not converted to `0`.
+
+The maximum number of digits for the conversion is defined by `→QDigits`, and
+the maximum number of iterations for the conversion is defined by
+`→QIterations`.
 
 ## →Qπ
 
 Convert decimal values to a rational form, or a rational form with π, square
-roots, natural logs, or the Euler constant *e* factored out, whichever yields
-the smaller denominator.
+roots, natural logs, or the Euler constant *e* factored out, whichever is
+simplest.
 
 The rational result is a "best guess", since there might be more than one
 rational expression consistent with the argument. `→Qπ` finds a quotient of
 integers that agrees with the argument to the number of decimal places specified
-by the display format mode.
+by the display format mode (or to the number of digits in the argument if it has
+fewer). A form with π, a square root, a logarithm or an exponential is only
+selected if evaluating it gives back the argument to that precision, and if its
+coefficients are simple enough for the match not to be a coincidence. Otherwise,
+the result is the same as for `→Q`. Among the matching forms, the one with the
+simplest coefficients is selected.
 
 For example, `3.14159265359 →Qπ` gives `π`, `1.4142135624 →Qπ` gives `√2`,
 and `0.346573590280 →Qπ` gives `ln 2/2`.
 
 For a complex argument, the real or imaginary part (or both) can have a constant
-factor.
+factor. In that case, the result is an expression, for example
+`1+3.14159265359ⅈ →Qπ` gives `'1+π·(ⅈ)'`.
 
 The [→QπMaxPrime](#→qπmaxprime) setting (default 100, max 10000)
 limits which primes are tried when factoring squares for √*n* detection. Lower
@@ -18123,8 +18138,11 @@ whereas `3 →FracIterations 3.1415926 →Frac` will give `355/113`.
 
 ## →QDigits
 
-Define the maximum number of digits of precision converting a decimal value to a
-fraction. For example, `2 →FracDigits 3.1415926 →Frac` will give `355/113`.
+Define the maximum number of significant digits of precision converting a
+decimal value to a fraction. The conversion never uses more digits than are
+shown by the current display mode. For example,
+`2 →QDigits 3.1415926 →Q` will give `22/7`, whereas
+`4 →QDigits 3.1415926 →Q` will give `333/106`.
 
 ## →QπMaxPrime
 

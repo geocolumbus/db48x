@@ -607,8 +607,11 @@ whereas `3 →FracIterations 3.1415926 →Frac` will give `355/113`.
 
 ## →QDigits
 
-Define the maximum number of digits of precision converting a decimal value to a
-fraction. For example, `2 →FracDigits 3.1415926 →Frac` will give `355/113`.
+Define the maximum number of significant digits of precision converting a
+decimal value to a fraction. The conversion never uses more digits than are
+shown by the current display mode. For example,
+`2 →QDigits 3.1415926 →Q` will give `22/7`, whereas
+`4 →QDigits 3.1415926 →Q` will give `333/106`.
 
 ## →QπMaxPrime
 
