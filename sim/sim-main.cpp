@@ -40,6 +40,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <unistd.h>
+#include <vector>
 
 #include <QApplication>
 #include <QByteArray>
@@ -214,17 +215,24 @@ static void sim_usage(FILE *out, cstring prog)
 }
 
 
+static std::vector<cstring> setting_args;
+
+
 static bool sim_parse_args(int argc, char *argv[])
 // ----------------------------------------------------------------------------
 //   Parse command-line options; return false if an option is invalid
 // ----------------------------------------------------------------------------
+//   Arguments that are not options or option values go to setting_args
 {
     for (int a = 1; a < argc; a++)
     {
         cstring as = argv[a];
         record(options, "  %u: %+s", a, as);
         if (as[0] != '-')
+        {
+            setting_args.push_back(as);
             continue;
+        }
 
         if (!strcmp(as, "-h") || !strcmp(as, "--help"))
         {
@@ -458,12 +466,8 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    for (int a = 1; a < argc; a++)
+    for (cstring as : setting_args)
     {
-        cstring as = argv[a];
-        if (as[0] == '-')
-            continue;
-
         if (cstring pos = strchr(as, '='))
         {
             size_t len   = pos - as;
