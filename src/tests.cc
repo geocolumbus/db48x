@@ -13822,7 +13822,67 @@ void tests::polynomial_roots()
         .expect("[ 1.25992 10498 9 -0.62996 05249 47+1.09112 36359 7ⅈ -0.62996 05249 47-1.09112 36359 7ⅈ ]");
     step("PRoot: double root is snapped to exact value")
         .test(CLEAR, "[1 -1 -8 12] PRoot", ENTER)
-        .expect("[ -3 2 ]");
+        .expect("[ -3 2 2 ]");
+    step("PRoot: double root of a quadratic is repeated")
+        .test(CLEAR, "[1 -2 1] PRoot", ENTER)
+        .expect("[ 1 1 ]");
+    step("PRoot: repeated roots round-trip through PCoef")
+        .test(CLEAR, "CompatiblePolynomials [1 -2 1] PRoot PCoef", ENTER)
+        .expect("[ 1 -2 1 ]");
+    step("PRoot: triple root")
+        .test(CLEAR, "[1 -3 3 -1] PRoot", ENTER)
+        .expect("[ 1 1 1 ]");
+    step("PRoot: quadruple root")
+        .test(CLEAR, "[1 -4 6 -4 1] PRoot", ENTER)
+        .expect("[ 1 1 1 1 ]");
+    step("PRoot: double root at zero")
+        .test(CLEAR, "[1 0 0] PRoot", ENTER)
+        .expect("[ 0 0 ]");
+    step("PRoot: two double roots")
+        .test(CLEAR, "[1 0 -2 0 1] PRoot", ENTER)
+        .expect("[ -1 -1 1 1 ]");
+    step("PRoot: close but distinct roots are not merged")
+        .test(CLEAR, "[1 -2.000001 1.000001] PRoot", ENTER)
+        .expect("[ 1 1.00000 1 ]");
+    step("PRoot: symbolic imaginary parts")
+        .test(CLEAR, "[1 0 2] PRoot", ENTER)
+        .expect("[ '√ 2'ⅈ -'√ 2'ⅈ ]");
+    step("PRoot: symbolic complex roots of x^2+x+1")
+        .test(CLEAR, "[1 1 1] PRoot", ENTER)
+        .expect("[ -¹/₂+'√ 3÷2'ⅈ -¹/₂-'√ 3÷2'ⅈ ]");
+    step("PRoot: symbolic complex roots of x^3+1")
+        .test(CLEAR, "[1 0 0 1] PRoot", ENTER)
+        .expect("[ -1 ¹/₂+'¹/₂·√ 3'ⅈ ¹/₂-'¹/₂·√ 3'ⅈ ]");
+    step("PRoot: symbolic complex roots of x^4+x^2+1")
+        .test(CLEAR, "[1 0 1 0 1] PRoot", ENTER)
+        .expect("[ ¹/₂+'¹/₂·√ 3'ⅈ ¹/₂-'¹/₂·√ 3'ⅈ "
+                "-¹/₂+'¹/₂·√ 3'ⅈ -¹/₂-'¹/₂·√ 3'ⅈ ]");
+    step("Rendering negative symbolic imaginary part")
+        .test(CLEAR, "(0;'-√2')", ENTER)
+        .expect("-'√2'ⅈ");
+    step("PRoot with surd roots leaves no pending error")
+        .test(CLEAR, "[1 0 -2] PRoot DROP 1 2 +", ENTER)
+        .expect("3");
+    step("PRoot with surd roots does not set the error message")
+        .test(CLEAR, "ERR0 [1 0 -2] PRoot ERRM", ENTER)
+        .expect("\"\"");
+    step("PRoot with surd roots inside a program")
+        .test(CLEAR, "« [1 0 -2] PRoot » EVAL", ENTER)
+        .noerror()
+        .expect("[ '-√ 2' '√ 2' ]");
+    step("PRoot with complex surd roots leaves no pending error")
+        .test(CLEAR, "[1 0 0 0 1] PRoot DROP 1 2 +", ENTER)
+        .expect("3");
+    step("Zeros with surd roots leaves no pending error")
+        .test(CLEAR, "'X^2-3' 'X' Zeros DROP 1 2 +", ENTER)
+        .expect("3");
+    step("Zeros with complex surd roots")
+        .test(CLEAR, "ComplexResults 'X^3-1' 'X' Zeros", ENTER)
+        .expect("{ 1 -¹/₂+'√ 3÷2'ⅈ -¹/₂-'√ 3÷2'ⅈ }")
+        .test(CLEAR, "'ComplexResults' PURGE", ENTER);
+    step("Zeros lists repeated roots once")
+        .test(CLEAR, "'X^2-2*X+1' 'X' Zeros", ENTER)
+        .expect("{ 1 }");
     step("PRoot: complex roots even without ComplexResults")
         .test(CLEAR, "'ComplexResults' PURGE [1 0 1] PRoot", ENTER)
         .expect("[ ⅈ -ⅈ ]");

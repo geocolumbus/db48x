@@ -2101,10 +2101,76 @@ static void drop_negligible_imaginary(algebraic_g &x, algebraic_r eps)
 }
 
 
-static void to_exact_root(algebraic_g &pretty,
+static bool is_number_value(algebraic_r x, bool exact)
+// ----------------------------------------------------------------------------
+//   Check if a root is a real or complex number, possibly an exact one
+// ----------------------------------------------------------------------------
+{
+    if (!x)
+        return false;
+    object::id ty = x->type();
+    if (ty == object::ID_rectangular)
+    {
+        rectangular_p z  = rectangular_p(+x);
+        algebraic_g   re = z->re();
+        algebraic_g   im = z->im();
+        return is_number_value(re, exact) && is_number_value(im, exact);
+    }
+    return exact ? x->is_fractionable() : object::is_real(ty);
+}
+
+
+static inline bool is_exact_value(algebraic_r x)
+// ----------------------------------------------------------------------------
+//   Check if a root is an exact number we can deflate a polynomial with
+// ----------------------------------------------------------------------------
+{
+    return is_number_value(x, true);
+}
+
+
+static bool is_exact_zero(polynomial_r p, algebraic_r x)
+// ----------------------------------------------------------------------------
+//   Check if an exact value is a zero of the polynomial
+// ----------------------------------------------------------------------------
+{
+    if (!p || !is_exact_value(x))
+        return false;
+    stack_buffer sbuf;
+    bool         result = false;
+    if (p->expand(sbuf, false))
+    {
+        algebraic_g value = polynomial::horner(sbuf, x);
+        result = value && value->is_zero(false);
+    }
+    sbuf.cleanup();
+    return result;
+}
+
+
+static bool is_close(algebraic_r guess, algebraic_r x, algebraic_r eps)
+// ----------------------------------------------------------------------------
+//   Check if the numerical value of a guess is within eps of x
+// ----------------------------------------------------------------------------
+{
+    algebraic_g check = guess;
+    if (!algebraic::to_decimal(check, true) || !check)
+        return false;
+    algebraic_g diff = check - x;
+    algebraic_g tol  = abs::run(x);
+    algebraic_g one  = integer::make(1);
+    if (!diff || !tol)
+        return false;
+    tol = (tol + one) * eps;
+    return tol && (diff->is_zero(false) || smaller_magnitude(diff, tol));
+}
+
+
+static bool to_exact_root(algebraic_g &pretty,
                           algebraic_r  x,
                           algebraic_r  eps,
-                          polynomial_r p)
+                          polynomial_r p,
+                          polynomial_r orig)
 // ----------------------------------------------------------------------------
 //   Replace a numeric root with a symbolic form only if it is exact
 // ----------------------------------------------------------------------------
@@ -2112,63 +2178,64 @@ static void to_exact_root(algebraic_g &pretty,
 //   results for irrational roots such as 99/64 for 1.54686..., so we only
 //   accept a guess that is an exact root of the polynomial, or that
 //   reproduces the numeric root at solver precision.
+//   Returns true if the guess is an exact zero of p, in which case the
+//   caller can deflate p exactly, which preserves the multiplicity of roots.
+//   Never leaves an error behind, since failing to prettify is not an error.
 {
-    algebraic_g guess = x;
-    if (!algebraic::to_sqrt(guess) || !guess)
-        return;
+    // Symbolic roots, e.g. from the quadratic formula, are already exact
+    if (!is_number_value(x, false))
+        return false;
 
-    // Exact zero of the polynomial (e.g. a snapped double root)
-    if (p)
+    algebraic_g guess  = x;
+    bool        result = false;
+    if (algebraic::to_sqrt(guess) && guess)
     {
-        stack_buffer sbuf;
-        if (p->expand(sbuf, false))
+        if (is_exact_zero(p, guess))
         {
-            algebraic_g value = polynomial::horner(sbuf, guess);
-            sbuf.cleanup();
-            if (value && value->is_zero(false))
+            // Exact zero of the current polynomial (e.g. a double root)
+            record(polyroots, "Exact zero %t for %t", +guess, +x);
+            pretty = guess;
+            result = true;
+        }
+        else if (is_close(guess, x, eps))
+        {
+            record(polyroots, "Exact root %t for %t", +guess, +x);
+            pretty = guess;
+        }
+        else if (orig && +orig != +p && is_exact_zero(orig, guess))
+        {
+            // After numerical deflation, multiple roots lose precision.
+            // Accept an exact zero of the original polynomial if it is
+            // close enough to the numerical root, but not so loosely that
+            // we would swallow a nearby distinct root
+            algebraic_g loose = eps;
+            loose = sqrt::run(loose);
+            if (loose && is_close(guess, x, loose))
             {
-                record(polyroots, "Exact zero %t for %t", +guess, +x);
+                record(polyroots, "Original zero %t for %t", +guess, +x);
                 pretty = guess;
-                return;
             }
         }
-        if (rt.error())
-            rt.clear_error();
+        if (+pretty != +guess)
+            record(polyroots, "Rejected guess %t for %t", +guess, +x);
     }
-
-    algebraic_g check = guess;
-    if (!algebraic::to_decimal(check, true) || !check)
-        return;
-    algebraic_g diff = check - x;
-    algebraic_g tol  = abs::run(x);
-    algebraic_g one  = integer::make(1);
-    if (!diff || !tol)
-        return;
-    tol = (tol + one) * eps;
-    if (!tol)
-        return;
-    if (diff->is_zero(false) || smaller_magnitude(diff, tol))
-    {
-        record(polyroots, "Exact root %t for %t", +guess, +x);
-        pretty = guess;
-    }
-    else
-    {
-        record(polyroots, "Rejected guess %t for %t", +guess, +x);
-    }
+    if (rt.error())
+        rt.clear_error();
+    return result;
 }
 
 
-list_p polynomial::roots(object::id ty, symbol_p var) const
+list_p polynomial::roots(object::id ty, symbol_p var, bool unique) const
 // ----------------------------------------------------------------------------
 //   Compute roots for polynomial and cleanup
 // ----------------------------------------------------------------------------
+//   PRoot returns repeated roots like legacy RPL, Zeros lists them once
 {
     cleaner purge;
     list_p  result = roots_internal(ty, var);
     if (result)
         result = result->sort();
-    if (result)
+    if (result && unique)
         result = result->unique();
     return purge(result);
 }
@@ -2287,8 +2354,8 @@ list_p polynomial::roots_internal(object::id ty, symbol_p var) const
                 drop_negligible_imaginary(y, eps);
                 if (round && x && y)
                 {
-                    to_exact_root(x, x, eps, orig);
-                    to_exact_root(y, y, eps, orig);
+                    to_exact_root(x, x, eps, nullptr, orig);
+                    to_exact_root(y, y, eps, nullptr, orig);
                 }
                 record(polyroots, "Solutions %t and %t", +x, +y);
                 if (cplx || !is_complex_value(x))
@@ -2326,7 +2393,7 @@ list_p polynomial::roots_internal(object::id ty, symbol_p var) const
             record(polyroots, "p' =%t", +der1);
             record(polyroots, "p''=%t", +der2);
 
-            settings::SaveComplexResults scr(true);
+            settings::SaveComplexResults scplx(true);
             size_t      max = Settings.SolverIterations();
             algebraic_g n   = integer::make(degree);
             algebraic_g n1  = integer::make(1);
@@ -2403,21 +2470,41 @@ list_p polynomial::roots_internal(object::id ty, symbol_p var) const
                 goto error;
             }
             // Prettify a copy of the root, but deflate with the numeric value
+            // unless the prettified root is an exact zero of p
             y = x;
             drop_negligible_imaginary(y, eps);
-            if (round)
-                to_exact_root(y, x, eps, orig);
-            if (cplx || !is_complex_value(y))
-                if (!rt.append(y))
+            bool exact = round && to_exact_root(y, x, eps, p, orig);
+            if (exact)
+                x = y;
+            do
+            {
+                if (cplx || !is_complex_value(y))
+                    if (!rt.append(y))
+                        goto error;
+
+                // Here p(x) is small enough, generate x-x0 polynomial
+                der1 = make(vname);
+                der2 = make(x);
+                der1 = sub(der1, der2);
+                der2 = div(p, der1);
+                record(polyroots, "Dividing %t by %t is %t",
+                       +p, +der1, +der2);
+                p = der2;
+                if (!p)
                     goto error;
 
-            // Here p(x) is small enough, generate x-x0 polynomial
-            der1 = make(vname);
-            der2 = make(x);
-            der1 = sub(der1, der2);
-            der2 = div(p, der1);
-            record(polyroots, "Dividing %t by %t is %t", +p, +der1, +der2);
-            p = der2;
+                // For an exact root, deflate again for each multiplicity
+                if (exact)
+                {
+                    size_t   didx = p->variable(+vname);
+                    iterator dr   = p->ranking(didx);
+                    if (dr.rank(didx) == 0)
+                        return list::make(ty, scr.scratch(), scr.growth());
+                    exact = is_exact_zero(p, x);
+                    if (rt.error())
+                        goto error;
+                }
+            } while (exact);
         }
     }
 
@@ -2517,7 +2604,7 @@ COMMAND_BODY(PRoot)
     if (object_p pobj = rt.top())
         if (polynomial_p poly = polynomial::get(pobj))
             if (symbol_p var = polynomial::main_variable())
-                if (list_p roots = poly->roots(ID_array, var))
+                if (list_p roots = poly->roots(ID_array, var, false))
                     if (rt.top(roots))
                         return OK;
 
