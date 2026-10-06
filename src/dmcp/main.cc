@@ -92,6 +92,7 @@ int  last_key            = 0;
 
 RECORDER(main,          16, "Main RPL thread");
 RECORDER(main_error,    16, "Errors in the main RPL thread");
+RECORDER(keymap_error,   8, "Errors loading the saved keymap");
 RECORDER(tests_rpl,    256, "Test request processing on RPL");
 RECORDER(refresh,       16, "Refresh requests");
 
@@ -357,11 +358,14 @@ bool load_saved_keymap(cstring name)
     // Load default keymap
     if (!ui.load_keymap(keymap_name))
     {
+        // Report the failure, but never leave a dangling error behind,
+        // since it would make the next command fail (e.g. -E at startup).
         // Fail silently if we try to load a default file
-        if (isdefault)
-            rt.clear_error();
-        else
-            rt.command(command::static_object(object::ID_KeyMap));
+        if (!isdefault)
+            record(keymap_error, "Unable to load keymap %s: %s",
+                   keymap_name,
+                   rt.error() ? cstring(rt.error()) : "invalid keymap");
+        rt.clear_error();
         return false;
     }
     return true;

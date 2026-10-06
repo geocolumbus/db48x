@@ -6265,10 +6265,33 @@ const byte *const defaultCommand[user_interface::NUM_PLANES] =
 };
 
 
+static bool keymap_append_default(uint plane, uint key)
+// ----------------------------------------------------------------------------
+//   Append the default object for a key that could not be read from a keymap
+// ----------------------------------------------------------------------------
+//   This keeps the following entries at the right position in the plane
+{
+    object_p obj = nullptr;
+    if (key < user_interface::NUM_KEYS)
+    {
+        const byte *ptr =
+            defaultCommand[plane % user_interface::NUM_PLANES] + 2 * key;
+        if (*ptr)
+            obj = object_p(ptr);
+    }
+    if (!obj)
+        obj = text::make("", 0);
+    return obj && rt.append(obj);
+}
+
+
 bool user_interface::load_keymap(cstring name)
 // ----------------------------------------------------------------------------
 //   Load the keymap from a file
 // ----------------------------------------------------------------------------
+//   Invalid entries are reported with keymap_warning and replaced with the
+//   default command for that key, so that a single typo does not discard
+//   the whole keymap or leave a dangling error behind.
 {
     file kmap(name, file::READING);
     if (!kmap.valid())
@@ -6279,10 +6302,14 @@ bool user_interface::load_keymap(cstring name)
     }
 
     static byte buffer[80];
-    size_t      idx = 0;
-    uint        key = 0;
+    size_t      idx      = 0;
+    uint        key      = 0;
+    uint        plane    = 0;
+    uint        line     = 1;
+    uint        tokline  = 1;
+    bool        quoted   = false;
+    bool        skipping = false;
     scribble    scr;
-    bool        quoted = false;
     list_g      result;
 
     while (kmap.valid())
@@ -6291,8 +6318,28 @@ bool user_interface::load_keymap(cstring name)
         if (c == '@' && !quoted)
         {
             do { c = kmap.get(); } while (c && c != '\n');
+        }
+
+        // Strings in keymaps do not span lines, except for the text that
+        // contains only a newline, i.e. a newline right after the quote
+        if (quoted && (!c || (c == '\n' && (skipping || idx != 1))))
+        {
+            buffer[idx] = 0;
+            record(keymap_warning,
+                   "%s:%u: unterminated string [%s] for key %u plane %u, "
+                   "using default",
+                   name, tokline, buffer, key + 1, plane);
+            keymap_append_default(plane, key);
+            key++;
+            idx = 0;
+            quoted = false;
+            skipping = false;
+            if (!c)
+                break;
+            line++;
             continue;
         }
+
         if (c == '"')
             quoted = !quoted;
         if (!quoted)
@@ -6301,28 +6348,42 @@ bool user_interface::load_keymap(cstring name)
                 continue;
             if (c == ']' || c == '}')
             {
-                list_g plane = list::make(object::ID_list,
-                                          scr.scratch(), scr.growth());
+                list_g pl = list::make(object::ID_list,
+                                       scr.scratch(), scr.growth());
                 if (!result)
-                    result = list::make(object::ID_list, plane);
+                    result = list::make(object::ID_list, pl);
                 else
-                    result = result->append(object_p(+plane));
+                    result = result->append(object_p(+pl));
                 scr.clear();
                 key = 0;
+                plane++;
                 continue;
             }
         }
-        if (quoted || !utf8_whitespace(c))
+        if (quoted || (c && !utf8_whitespace(c)))
         {
-            idx += utf8_encode(c, buffer + idx);
-            if (idx >= sizeof(buffer) - 4)
+            if (!idx && !skipping)
+                tokline = line;
+            if (!skipping)
             {
-                buffer[idx] = 0;
-                record(keymap_warning, "%s: [%s] is too long",
-                       name, buffer);
-                rt.syntax_error();
-                return false;
+                idx += utf8_encode(c, buffer + idx);
+                if (idx >= sizeof(buffer) - 4)
+                {
+                    buffer[idx] = 0;
+                    record(keymap_warning,
+                           "%s:%u: key %u plane %u too long, "
+                           "using default: [%s]",
+                           name, tokline, key + 1, plane, buffer);
+                    skipping = true;
+                    idx = 0;
+                }
             }
+        }
+        else if (skipping)
+        {
+            keymap_append_default(plane, key);
+            key++;
+            skipping = false;
         }
         else if (idx)
         {
@@ -6330,18 +6391,26 @@ bool user_interface::load_keymap(cstring name)
             object_p parsed = object::parse(buffer, idx);
             if (!parsed)
             {
-                record(keymap_warning, "%s key %u: could not parse [%s]: %s",
-                       name, key, buffer, rt.error());
-                return false;
+                buffer[idx] = 0;
+                record(keymap_warning,
+                       "%s:%u: could not parse [%s] for key %u plane %u: %s",
+                       name, tokline, buffer, key + 1, plane, rt.error());
+                rt.clear_error();
+                keymap_append_default(plane, key);
+            }
+            else
+            {
+                record(user_interface, "For key %u object %t", key+1, parsed);
+                if (parsed->type() == object::ID_symbol)
+                    record(keymap_warning, "%s:%u: key %u: %t is a symbol",
+                           name, tokline, key + 1, parsed);
+                rt.append(parsed);
             }
             key++;
-            record(user_interface, "For key %u object %t", key, parsed);
-            if (parsed->type() == object::ID_symbol)
-                record(keymap_warning, "%s key %u: %t is a symbol",
-                       name, key, parsed);
-            rt.append(parsed);
             idx = 0;
         }
+        if (c == '\n')
+            line++;
         if (!c)
             break;
     }
